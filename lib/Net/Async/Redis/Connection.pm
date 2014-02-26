@@ -5,6 +5,22 @@ use warnings;
 
 use base qw( IO::Async::Stream );
 
+sub connect {
+   my $self = shift;
+   my %args = @_;
+
+   $self->debug_printf( "CONNECT $args{host}:$args{service}" );
+
+   defined wantarray or die "VOID ->connect";
+
+   $self->SUPER::connect(
+      socktype => "stream",
+      %args
+   )->on_done( sub {
+      $self->debug_printf( "CONNECTED" );
+      $self->ready;
+   });
+}
 sub _build__redis {
     my $self = shift;
     my $f    = $self->loop->connect(

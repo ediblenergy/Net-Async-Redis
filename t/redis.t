@@ -6,17 +6,17 @@ use IO::Async::Loop;
 use Test::RedisServer;
 use Data::Dumper::Concise;
 my $loop = IO::Async::Loop->new;
-
-#my $r= Test::RedisServer->new(
-#    conf => {
-#        port => 9999,
-#    } );
+my $p = 9999;
+my $r= Test::RedisServer->new(
+    conf => {
+        port => $p,
+    } );
 #warn Dumper( $r->connect_info );
 my $redis = Net::Async::Redis->new;
 $loop->add($redis);
 $redis->connect(
     host => 'localhost',
-    port => 6379,
+    port => $p,
 );
 my $f_del = $redis->del("foo");
 $f_del->get;

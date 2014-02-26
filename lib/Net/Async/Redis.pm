@@ -8,12 +8,13 @@ use Data::Dumper::Concise;
 use Scalar::Util qw[ weaken ];
 
 use IO::Async::Stream;
-use Protocol::Resp;
+use Protocol::RESP;
 use Future::Utils qw[ repeat ];
+use Try::Tiny;
 
 sub CRLF { "\r\n" }
 
-my $resp = Protocol::Resp->new;
+my $resp = Protocol::RESP->new;
 
 sub connect {
     my $self   = shift;
@@ -61,24 +62,37 @@ sub _cmd {
     my $redis = $self->{_redis};
     weaken($redis);
     my $CRLF = CRLF;
-    return $redis->write($str)->then( sub {
-            my $f = Future->new;
+    return $redis->write($str)->then(
+        sub {
+            my $f   = Future->new;
             my $buf = '';
-            $redis->push_on_read(sub{
+            $redis->push_on_read(
+                sub {
                     my ( undef, $buffref, $eof ) = @_;
                     while ( $$buffref =~ s/^(.*$CRLF)// ) {
                         $buf .= $1;
-                        warn "received: [$buf]";
-                        my $ret = $resp->parse($buf);
-                        if(defined $ret) {
-                            warn "got ret!";
-                            $f->done($ret);
-                            $buf = '';
-                            return undef;
+
+                        #warn "received: [$buf]";
+                        my ( $ret, $continue );
+                        try {
+                            $ret = $resp->parse($buf);
                         }
+                        catch {
+                            if (/incomplete parse/) {
+                                $continue++;
+                            }
+                            else {
+                                die $_;
+                            }
+                        };
+                        return $continue if $continue;
+                        warn sprintf( "got ret: [%s]" => Dumper($ret) );
+                        $f->done($ret);
+                        $buf = '';
+                        return undef;
                     }
-                    return 1;
-                });
+
+                } );
             return $f;
         } );
 }

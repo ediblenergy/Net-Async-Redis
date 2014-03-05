@@ -49,20 +49,27 @@ sub connect {
     $self->loop->add($_redis);
     return $self->{_redis} = $_redis;
 }
+#our $AUTOLOAD;
+#sub AUTOLOAD {
+#    my $self = shift;
+#    my $cmd = $AUTOLOAD;
+#    warn @_;
+#}
+#
+sub del { shift->command("DEL",@_); }
 
-sub del { shift->_cmd("DEL",@_); }
+sub set { shift->command("SET",@_); }
 
-sub set { shift->_cmd("SET",@_); }
+sub get { shift->command("GET",@_); }
 
-sub get { shift->_cmd("GET",@_); }
-
-sub _cmd {
+sub command {
     my ( $self, $cmd, @args ) = @_;
+    $cmd = uc($cmd);
     my $str = $self->__format_command( $cmd, @args );
     my $redis = $self->{_redis};
     weaken($redis);
     my $CRLF = CRLF;
-    return $redis->write($str)->then(
+    return my $write_future = $redis->write($str)->then(
         sub {
             my $f   = Future->new;
             my $buf = '';
@@ -71,14 +78,13 @@ sub _cmd {
                     my ( undef, $buffref, $eof ) = @_;
                     while ( $$buffref =~ s/^(.*$CRLF)// ) {
                         $buf .= $1;
-
-                        #warn "received: [$buf]";
                         my ( $ret, $continue );
                         try {
                             $ret = $resp->parse($buf);
                         }
                         catch {
                             if (/incomplete parse/) {
+#                                warn "incomplete parse!";
                                 $continue++;
                             }
                             else {
@@ -86,7 +92,7 @@ sub _cmd {
                             }
                         };
                         return $continue if $continue;
-                        warn sprintf( "got ret: [%s]" => Dumper($ret) );
+#                        warn sprintf( "got ret: [%s]" => Dumper($ret) );
                         $f->done($ret);
                         $buf = '';
                         return undef;

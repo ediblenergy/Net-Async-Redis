@@ -11,6 +11,7 @@ my $r= Test::RedisServer->new(
     conf => {
         port => $p,
     } );
+warn "redis instantiated";
 #warn Dumper( $r->connect_info );
 my $redis = Net::Async::Redis->new;
 $loop->add($redis);
@@ -24,6 +25,12 @@ $f_del->get;
 my $f = $redis->set("foo","bar");
 is $f->get,"OK","got OK from set";
 is $redis->get("foo")->get, "bar";
-$loop->delay_future( after => 3 )->on_done( sub { $loop->stop } );
+my %floops = ( hey => 'you', chipz => 'ahoy' );
+$redis->command( 'hmset', floops => %floops );
+
+is_deeply +{ @{ $redis->command('hgetall', 'floops' )->get } }, \%floops, "got back floops";
+warn(
+    "dump:" . Dumper( { @{ $redis->command( 'hgetall', 'floops' )->get } } ) );
+$loop->delay_future( after => 2 )->on_done( sub { $loop->stop } );
 $loop->loop_forever;
 done_testing;
